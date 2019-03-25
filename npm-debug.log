@@ -1,0 +1,105 @@
+0 info it worked if it ends with ok
+1 verbose cli [ '/Users/brjennings/.nvm/versions/node/v8.12.0/bin/node',
+1 verbose cli   '/Users/brjennings/Desktop/projects/paypal-muse-components/node_modules/.bin/npm',
+1 verbose cli   'publish' ]
+2 info using npm@3.10.10
+3 info using node@v8.12.0
+4 warn invalid config loglevel="notice"
+5 verbose publish [ '.' ]
+6 silly cache add args [ '.', null ]
+7 verbose cache add spec .
+8 silly cache add parsed spec Result {
+8 silly cache add   raw: '.',
+8 silly cache add   scope: null,
+8 silly cache add   escapedName: null,
+8 silly cache add   name: null,
+8 silly cache add   rawSpec: '.',
+8 silly cache add   spec: '/Users/brjennings/Desktop/projects/paypal-muse-components',
+8 silly cache add   type: 'directory' }
+9 verbose addLocalDirectory /Users/brjennings/.npm/@paypal/muse-components/1.0.5/package.tgz not in flight; packing
+10 verbose correctMkdir /Users/brjennings/.npm correctMkdir not in flight; initializing
+11 info lifecycle @paypal/muse-components@1.0.5~prepublish: @paypal/muse-components@1.0.5
+12 silly lifecycle @paypal/muse-components@1.0.5~prepublish: no script for prepublish, continuing
+13 verbose tar pack [ '/Users/brjennings/.npm/@paypal/muse-components/1.0.5/package.tgz',
+13 verbose tar pack   '/Users/brjennings/Desktop/projects/paypal-muse-components' ]
+14 verbose tarball /Users/brjennings/.npm/@paypal/muse-components/1.0.5/package.tgz
+15 verbose folder /Users/brjennings/Desktop/projects/paypal-muse-components
+16 verbose addLocalTarball adding from inside cache /Users/brjennings/.npm/@paypal/muse-components/1.0.5/package.tgz
+17 verbose correctMkdir /Users/brjennings/.npm correctMkdir not in flight; initializing
+18 silly cache afterAdd @paypal/muse-components@1.0.5
+19 verbose afterAdd /Users/brjennings/.npm/@paypal/muse-components/1.0.5/package/package.json not in flight; writing
+20 verbose correctMkdir /Users/brjennings/.npm correctMkdir not in flight; initializing
+21 verbose afterAdd /Users/brjennings/.npm/@paypal/muse-components/1.0.5/package/package.json written
+22 silly publish { name: '@paypal/muse-components',
+22 silly publish   version: '1.0.5',
+22 silly publish   description: 'MUSE component for unified PayPal/Braintree web sdk',
+22 silly publish   main: 'index.js',
+22 silly publish   scripts:
+22 silly publish    { release: 'npm run release:patch',
+22 silly publish      'release:patch': './publish.sh patch',
+22 silly publish      'release:minor': './publish.sh minor',
+22 silly publish      'release:major': './publish.sh major',
+22 silly publish      'flow-typed': 'flow-typed install',
+22 silly publish      flow: 'flow',
+22 silly publish      'flow:build': 'flow gen-flow-files ./src/index.js --out-dir ./dist/module',
+22 silly publish      lint: 'eslint src/ test/ *.js --fix',
+22 silly publish      test: 'npm run lint && npm run flow-typed && npm run flow && npm run karma',
+22 silly publish      karma: 'cross-env NODE_ENV=test babel-node $(npm bin)/karma start' },
+22 silly publish   files: [ 'src', '__sdk__.js' ],
+22 silly publish   repository:
+22 silly publish    { type: 'git',
+22 silly publish      url: 'git+https://github.com/paypal/paypal-muse-components.git' },
+22 silly publish   author: { name: 'dbrain' },
+22 silly publish   license: 'MIT',
+22 silly publish   bugs:
+22 silly publish    { url: 'https://github.com/paypal/paypal-muse-components/issues' },
+22 silly publish   homepage: 'https://github.com/paypal/paypal-muse-components#readme',
+22 silly publish   devDependencies:
+22 silly publish    { chai: '^4.2.0',
+22 silly publish      'flow-bin': '^0.70.0',
+22 silly publish      'grumbler-scripts': '^3',
+22 silly publish      mocha: '^4' },
+22 silly publish   dependencies: { '@paypal/sdk-client': '^4.0.1' },
+22 silly publish   readme: 'MUSE Component\n----------------------------------\n\nMUSE component included in unified PayPal/Braintree client SDK.\n\n### Quick start\n\nSee [src/index.js](./src/index.js)\n\n#### Tests\n\n- Run the tests:\n\n  ```bash\n  npm test\n  ```\n\n#### Testing with different/multiple browsers\n\n```bash\nnpm run karma -- --browser=Chrome\nnpm run karma -- --browser=Safari\nnpm run karma -- --browser=Firefox\nnpm run karma -- --browser=Chrome,Safari,Firefox\n```\n\n#### Keeping the browser open after tests\n\n```bash\nnpm run karma -- --browser=Chrome --keep-open\n```\n\n#### Releasing and Publishing\n\n- Publish your code with a patch version: \n\n```bash\nnpm run release\n```\n\n- Or `npm run release:patch`, `npm run release:minor`, `npm run release:major`\n\n### Module structure\n\n- `/src` - any code which should be transpiled, published, and end up in production\n- `/test` - karma tests for everything in `/src`\n- `__sdk__.js` - metadata for compiling and bundling the final component\n\n#### `/src/component.js`\n\nThis module exports the public interface for the component.\n\n```javascript\nexport let LebowskiPay = {\n    render(options) {\n        ...\n    }\n};\n```\n\nThen the integrating site can run:\n\n```javascript\npaypal.LebowskiPay.render({ ... });\n```\n\n#### `/__sdk__.js`\n\n`__sdk__.js` defines any metadata which helps the sdk server compile and serve up the component.\n\n```javascript\nexport default {\n\n    /**\n     * Define the lebowski-pay component\n     * Now developers can include paypal.com/sdk/js?components=lebowski-pay\n     */\n\n    \'lebowski-pay\': {\n\n        /**\n         * Entry point. Everything exported from this module will be exported\n         * in the `window.paypal` namespace.\n         */\n\n        entry: \'./src/index\',\n\n        /**\n         * Define a static namespace.\n         * Server config will be available under the `__lebowski_pay__.serverConfig` global\n         */\n\n        staticNamespace: \'__lebowski_pay__\',\n\n        /**\n         * Define configuration required by this module\n         * \n         * - This should be in the form of a graphql query.\n         * - The query will be merged with queries defined by other modules\n         * - The final config will be passed as `__lebowski_pay__.serverConfig` in `./src/index` \n         */\n\n        configQuery: `\n            fundingEligibility {\n                card {\n                    branded\n                }\n            }\n        `\n    }\n};\n```\n\n\n### FAQ\n\n- **Why is there no webpack config, dist folder, or npm build command?**\n  \n  This module (and modules like it) are not intended to be built as standalone components. It will be pulled in and compiled/bundled on the server-side, then combined with other modules.\n\n- **When should I publish?**\n  \n  When you publish, you\'re signing off on your changes being code-complete, fully tested, and ready for release. Publishing **will not immediately trigger a deploy**, but please only publish changes which are in a deployable state.\n\n- **Can I define multiple components in one repo?**\n\n  Absolutely. `__sdk__.js` allows defining multiple entry points. These should generally represent different logical ui components, with separate concerns, and loose coupling. For example:\n\n  ```javascript\n  modules: {\n    \'lebowski-pay\': {\n        entry: \'./src/components/lebowski-pay\'\n    },\n    \'walter-pay\': {\n        entry: \'./src/components/walter-pay\'\n    },\n    \'donnie-pay\': {\n        entry: \'./src/components/donnie-pay\'\n    }\n  },\n  ```\n\n  Please bear in mind that this opens the door to any combination or permutation of these modules to be requested by the merchant -- hence the need for loose coupling. `donnie-pay` should never have a hard dependency on `lebowski-pay` being present.\n\n- **Where is all of the karma, webpack, eslint, etc. config coming from?**\n\n  This module uses `grumbler-scripts` as a common source of configuration and defaults. Any of these can be overriden, either partially, or entirely, depending on the individual needs of the module. You\'ll notice `.eslintrc.js`, `karma.conf.js`, etc. are lightweight wrappers which only define module-specific overrides.\n',
+22 silly publish   readmeFilename: 'README.md',
+22 silly publish   gitHead: '76b8e3a2fc5b95e72b2ca3e71e00e8300b50b8a7',
+22 silly publish   _id: '@paypal/muse-components@1.0.5',
+22 silly publish   _shasum: 'fdd828aeff05e585bd6aefd70814dd2f557507d5',
+22 silly publish   _from: '.' }
+23 verbose getPublishConfig undefined
+24 silly mapToRegistry name @paypal/muse-components
+25 silly mapToRegistry scope (from package name) @paypal
+26 verbose mapToRegistry no registry URL found in name for scope @paypal
+27 silly mapToRegistry using default registry
+28 silly mapToRegistry registry http://registry.npmjs.com/
+29 silly mapToRegistry data Result {
+29 silly mapToRegistry   raw: '@paypal/muse-components',
+29 silly mapToRegistry   scope: '@paypal',
+29 silly mapToRegistry   escapedName: '@paypal%2fmuse-components',
+29 silly mapToRegistry   name: '@paypal/muse-components',
+29 silly mapToRegistry   rawSpec: '',
+29 silly mapToRegistry   spec: 'latest',
+29 silly mapToRegistry   type: 'tag' }
+30 silly mapToRegistry uri http://registry.npmjs.com/@paypal%2fmuse-components
+31 verbose publish registryBase http://registry.npmjs.com/
+32 silly publish uploading /Users/brjennings/.npm/@paypal/muse-components/1.0.5/package.tgz
+33 verbose stack Error: auth required for publishing
+33 verbose stack     at CachingRegistryClient.publish (/Users/brjennings/Desktop/projects/paypal-muse-components/node_modules/npm/node_modules/npm-registry-client/lib/publish.js:30:14)
+33 verbose stack     at /Users/brjennings/Desktop/projects/paypal-muse-components/node_modules/npm/lib/publish.js:138:14
+33 verbose stack     at mapToRegistry (/Users/brjennings/Desktop/projects/paypal-muse-components/node_modules/npm/lib/utils/map-to-registry.js:62:3)
+33 verbose stack     at publish_ (/Users/brjennings/Desktop/projects/paypal-muse-components/node_modules/npm/lib/publish.js:107:3)
+33 verbose stack     at Array.<anonymous> (/Users/brjennings/Desktop/projects/paypal-muse-components/node_modules/npm/node_modules/slide/lib/bind-actor.js:15:8)
+33 verbose stack     at LOOP (/Users/brjennings/Desktop/projects/paypal-muse-components/node_modules/npm/node_modules/slide/lib/chain.js:15:14)
+33 verbose stack     at LOOP (/Users/brjennings/Desktop/projects/paypal-muse-components/node_modules/npm/node_modules/slide/lib/chain.js:14:28)
+33 verbose stack     at chain (/Users/brjennings/Desktop/projects/paypal-muse-components/node_modules/npm/node_modules/slide/lib/chain.js:20:5)
+33 verbose stack     at /Users/brjennings/Desktop/projects/paypal-muse-components/node_modules/npm/lib/publish.js:73:5
+33 verbose stack     at RES (/Users/brjennings/Desktop/projects/paypal-muse-components/node_modules/npm/node_modules/inflight/inflight.js:23:14)
+34 verbose cwd /Users/brjennings/Desktop/projects/paypal-muse-components
+35 error Darwin 18.2.0
+36 error argv "/Users/brjennings/.nvm/versions/node/v8.12.0/bin/node" "/Users/brjennings/Desktop/projects/paypal-muse-components/node_modules/.bin/npm" "publish"
+37 error node v8.12.0
+38 error npm  v3.10.10
+39 error code ENEEDAUTH
+40 error need auth auth required for publishing
+41 error need auth You need to authorize this machine using `npm adduser`
+42 verbose exit [ 1, true ]
