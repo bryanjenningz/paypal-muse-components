@@ -1,6 +1,6 @@
 {
   "name": "@paypal/muse-components",
-  "version": "1.0.11",
+  "version": "1.0.20",
   "description": "MUSE component for unified PayPal/Braintree web sdk",
   "main": "index.js",
   "scripts": {
@@ -8,7 +8,7 @@
     "release:patch": "./publish.sh patch",
     "release:minor": "./publish.sh minor",
     "release:major": "./publish.sh major",
-    "flow-typed": "flow-typed install",
+    "flow-typed": "rm -rf ./flow-typed && flow-typed install",
     "flow": "flow",
     "flow:build": "flow gen-flow-files ./src/index.js --out-dir ./dist/module",
     "lint": "eslint src/ test/ *.js --fix",
@@ -31,11 +31,13 @@
   "homepage": "https://github.com/paypal/paypal-muse-components#readme",
   "devDependencies": {
     "chai": "^4.2.0",
-    "flow-bin": "^0.70.0",
+    "flow-bin": "^0.100.0",
     "grumbler-scripts": "^3",
-    "mocha": "^4"
+    "mocha": "^4",
+    "sinon": "^7.3.2"
   },
   "dependencies": {
-    "@paypal/sdk-client": "^4.0.1"
+    "@paypal/sdk-client": "^4.0.1",
+    "whatwg-fetch": "^3.0.0"
   }
 }

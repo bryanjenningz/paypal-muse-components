@@ -1,9 +1,13 @@
 /* @flow */
+import 'whatwg-fetch'; // eslint-disable-line import/no-unassigned-import
 
 import { getClientID, getMerchantID } from '@paypal/sdk-client/src';
 
-import { generateId } from './generate-id';
+// $FlowFixMe
+import generate from './generate-id';
 import { getCookie, setCookie } from './lib/cookie-utils';
+import getJetlore from './lib/jetlore';
+import { getDeviceInfo } from './lib/get-device-info';
 
 type TrackingType = 'view' | 'cartEvent' | 'purchase' | 'setUser';
 
@@ -45,10 +49,9 @@ type UserData = {|
     |}
 |};
 
-type PropertyData = {|
-    property : {|
-        id : string
-    |}
+type IdentityData = {|
+    mrid : string,
+    onIdentification : Function
 |};
 
 type ParamsToBeaconUrl = ({
@@ -56,18 +59,36 @@ type ParamsToBeaconUrl = ({
     data : ViewData | CartData | RemoveCartData | PurchaseData
 }) => string;
 
+type ParamsToTokenUrl = () => string;
+
+type JetloreConfig = {|
+    user_id : string,
+    cid : string,
+    feed_id : string,
+    div? : string,
+    lang? : string
+|};
+
 type Config = {|
     user? : {|
         email? : string, // mandatory if unbranded cart recovery
         name? : string
     |},
-    property? : {|
-        id : string
-    |},
-    paramsToBeaconUrl? : ParamsToBeaconUrl
+    propertyId? : string,
+    paramsToBeaconUrl? : ParamsToBeaconUrl,
+    paramsToTokenUrl? : ParamsToTokenUrl,
+    jetlore? : {|
+        user_id : string,
+        access_token : string,
+        feed_id : string,
+        div? : string,
+        lang? : string
+    |}
 |};
 
 const sevenDays = 6.048e+8;
+
+const accessTokenUrl = 'https://www.paypal.com/muse/api/partner-token';
 
 const getUserIdCookie = () : ?string => {
     return getCookie('paypal-user-id') || null;
@@ -75,7 +96,85 @@ const getUserIdCookie = () : ?string => {
 
 const setRandomUserIdCookie = () : void => {
     const ONE_MONTH_IN_MILLISECONDS = 30 * 24 * 60 * 60 * 1000;
-    setCookie('paypal-user-id', generateId(), ONE_MONTH_IN_MILLISECONDS);
+    setCookie('paypal-user-id', generate.generateId(), ONE_MONTH_IN_MILLISECONDS);
+};
+
+const setCartCookie = (type, data) : void => {
+    const currentCookie = getCookie('paypal-cr-cart');
+    if (type === 'add' && currentCookie !== '') {
+        const parsedCookie = JSON.parse(currentCookie);
+        const currentItems = parsedCookie && parsedCookie.items;
+        if (currentItems && currentItems.length) {
+            data.items = [
+                ...currentItems,
+                ...data.items
+            ];
+        }
+    }
+    setCookie('paypal-cr-cart', JSON.stringify(data), sevenDays);
+};
+
+const getAccessToken = (url : string, mrid : string) : Promise<string> => {
+    return fetch(url, {
+        method:      'POST',
+        credentials: 'include',
+        headers:     {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            mrid,
+            clientId: getClientID()
+        })
+    }).then(r => r.json()).then(data => {
+        return data.cr_token;
+    });
+};
+
+const getJetlorePayload = (type : string, options : Object) : Object => {
+    const { payload } = options;
+    switch (type) {
+    case 'addToCart':
+    case 'removeFromCart':
+        return {
+            deal_id:   payload.deal_id,
+            option_id: payload.option_id,
+            count:     payload.count,
+            price:     payload.price
+        };
+    case 'purchase':
+        return {
+            deal_id:   payload.deal_id,
+            option_id: payload.option_id,
+            count:     payload.count
+        };
+    case 'search':
+        return {
+            text: payload.text
+        };
+    case 'view':
+        return {
+            deal_id:   payload.deal_id,
+            option_id: payload.option_id
+        };
+    case 'browse_section':
+        return {
+            name:        payload.name,
+            refinements: payload.refinements
+        };
+    case 'browse_promo':
+        return {
+            name: payload.name,
+            id:   payload.id
+        };
+    case 'addToWishList':
+    case 'removeFromWishList':
+    case 'addToFavorites':
+    case 'removeFromFavorites':
+    case 'track':
+        return payload;
+    default:
+        return {};
+    }
 };
 
 const track = <T>(config : Config, trackingType : TrackingType, trackingData : T) => {
@@ -83,23 +182,22 @@ const track = <T>(config : Config, trackingType : TrackingType, trackingData : T
 
     const img = document.createElement('img');
     img.style.display = 'none';
-
     if (!getUserIdCookie()) {
         setRandomUserIdCookie();
     }
-
     const user = {
         ...config.user,
         id: getUserIdCookie()
     };
-
+    const deviceInfo = getDeviceInfo();
     const data = {
         ...trackingData,
         user,
-        property:   config.property,
+        propertyId:   config.propertyId,
         trackingType,
         clientId:   getClientID(),
-        merchantId: getMerchantID()
+        merchantId: getMerchantID().join(','),
+        deviceInfo
     };
 
     // paramsToBeaconUrl is a function that gives you the ability to override the beacon url
@@ -119,27 +217,130 @@ const track = <T>(config : Config, trackingType : TrackingType, trackingData : T
 const trackCartEvent = <T>(config : Config, cartEventType : CartEventType, trackingData : T) =>
     track(config, 'cartEvent', { ...trackingData, cartEventType });
 
-export const Tracker = (config? : Config = { user: { email: undefined, name: undefined } }) => ({
-    view:           (data : ViewData) => track(config, 'view', data),
-    addToCart:      (data : CartData) => {
-        setCookie('paypal-cr-cart', JSON.stringify(data), sevenDays);
-        return trackCartEvent(config, 'addToCart', data);
-    },
-    setCart:        (data : CartData) => trackCartEvent(config, 'setCart', data),
-    removeFromCart: (data : RemoveCartData) => trackCartEvent(config, 'removeFromCart', data),
-    purchase:       (data : PurchaseData) => track(config, 'purchase', data),
-    setUser:        (data : UserData) => {
-        config = {
-            ...config,
-            user: {
-                ...config.user,
-                email: data.user.email || ((config && config.user) || {}).email,
-                name:  data.user.name || ((config && config.user) || {}).name
-            }
+const defaultTrackerConfig = { user: { email: undefined, name: undefined } };
+
+export const Tracker = (config? : Config = defaultTrackerConfig) => {
+    const JL = getJetlore();
+    const jetloreTrackTypes = [
+        'view',
+        'addToCart',
+        'removeFromCart',
+        'purchase',
+        'search',
+        'browse_section',
+        'addToWishList',
+        'removeFromWishList',
+        'addToFavorites',
+        'removeFromFavorites',
+        'track'
+    ];
+    if (config.jetlore) {
+        const {
+            user_id,
+            access_token,
+            feed_id,
+            div,
+            lang
+        } = config && config.jetlore;
+        const trackingConfig : JetloreConfig = {
+            cid: access_token,
+            user_id,
+            feed_id
         };
-        track(config, 'setUser', { oldUserId: getUserIdCookie() });
-    },
-    setProperty: (data : PropertyData) => {
-        config.property = { id: data.property.id };
+        if (!div) {
+            trackingConfig.div = div;
+        }
+        if (!lang) {
+            trackingConfig.lang = lang;
+        }
+        JL.tracking(trackingConfig);
     }
-});
+    const trackers = {
+        addToCart:  (data : CartData) => {
+            setCartCookie('add', data);
+            return trackCartEvent(config, 'addToCart', data);
+        },
+        setCart:        (data : CartData) => {
+            setCartCookie('set', data);
+            return trackCartEvent(config, 'setCart', data);
+        },
+        removeFromCart: (data : RemoveCartData) => trackCartEvent(config, 'removeFromCart', data),
+        purchase:       (data : PurchaseData) => track(config, 'purchase', data),
+        setUser:        (data : UserData) => {
+            config = {
+                ...config,
+                user: {
+                    ...config.user,
+                    email: data.user.email || ((config && config.user) || {}).email,
+                    name:  data.user.name || ((config && config.user) || {}).name
+                }
+            };
+            track(config, 'setUser', { oldUserId: getUserIdCookie() });
+        },
+        setPropertyId: (id : string) => {
+            config.propertyId = id;
+        },
+        getIdentity: (data : IdentityData, url? : string = accessTokenUrl) => {
+            return getAccessToken(url, data.mrid)
+                .then(accessToken => {
+                    if (data.onIdentification) {
+                        data.onIdentification({ getAccessToken: () => accessToken });
+                    }
+                    return accessToken;
+                });
+        }
+    };
+    const trackEvent = (type : string, data : Object) => {
+        const isJetloreType = config.jetlore
+            ? jetloreTrackTypes.includes(type)
+            : false;
+        if (config.jetlore && isJetloreType && data) {
+            const jlData = getJetlorePayload(type, data);
+            JL.tracker[type](jlData);
+        }
+        if (trackers[type]) {
+            trackers[type](data);
+        }
+    };
+    const identify = (cb? : function) => {
+        let url;
+        if (config.paramsToTokenUrl) {
+            url = config.paramsToTokenUrl();
+        } else {
+            url = 'https://paypal.com/muse/api/partner-token';
+        }
+        return window.fetch(url, {
+            method:      'POST',
+            credentials: 'include',
+            headers:     {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                merchantId: getMerchantID()[0],
+                clientId:   getClientID()
+            })
+        }).then(res => {
+            if (res.status !== 200) {
+                return false;
+            }
+            return res.json();
+        }).then(data => {
+            if (!data) {
+                const failurePayload = { success: false };
+                return cb ? cb(failurePayload) : failurePayload;
+            }
+            const identityPayload = {
+                ...data,
+                success: true
+            };
+            return cb ?  cb(identityPayload) : identityPayload;
+        });
+    };
+    return {
+        // bringing in tracking functions for backwards compatibility
+        ...trackers,
+        track: trackEvent,
+        identify,
+        getJetlorePayload
+    };
+};

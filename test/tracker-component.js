@@ -5,8 +5,8 @@ import { expect } from 'chai';
 
 import { Tracker } from '../src/tracker-component';
 import { setCookie } from '../src/lib/cookie-utils';
-// eslint-disable-next-line import/no-namespace
-import * as generateIdModule from '../src/generate-id';
+// $FlowFixMe
+import generateIdModule from '../src/generate-id';
 
 const decode = (encodedDataParam : string) : string => {
     return JSON.parse(atob(decodeURIComponent(encodedDataParam)));
@@ -26,6 +26,25 @@ describe('paypal.Tracker', () => {
     let appendChildCalls = 0;
     const appendChild = () => {
         appendChildCalls += 1;
+    };
+    let fetchCalls = [];
+    window.fetch = (url, options) => {
+        fetchCalls.push([ url, options ]);
+        return Promise.resolve({
+            url,
+            body:   options.body,
+            status: 200,
+            json:   () => ({ hello: 'hi' })
+        });
+    };
+
+    const deviceInfo = {
+        screenWidth:    '1000',
+        screenHeight:   '750',
+        colorDepth:     '300',
+        deviceType:     'desktop',
+        browserHeight:  '400',
+        browserWidth:   '400'
     };
 
     const imgMock = {
@@ -48,12 +67,16 @@ describe('paypal.Tracker', () => {
     const originalDocumentCreateElement = document.createElement;
     const originalGenerateId = generateIdModule.generateId;
     before(() => {
+        const deviceLib = require('../src/lib/get-device-info');
+        // $FlowFixMe
+        deviceLib.getDeviceInfo = () => deviceInfo;
         // $FlowFixMe
         document.body.appendChild = appendChild;
         // $FlowFixMe
         document.createElement = createElement;
         // $FlowFixMe
-        generateIdModule.generateId = () => 'abc123'; // eslint-disable-line import/namespace
+        generateIdModule.generateId = () => 'abc123';
+        // generateIdModule.set(() => 'abc123');
     });
 
     // $FlowFixMe
@@ -63,53 +86,26 @@ describe('paypal.Tracker', () => {
         // $FlowFixMe
         document.createElement = originalDocumentCreateElement;
         // $FlowFixMe
-        generateIdModule.generateId = originalGenerateId; // eslint-disable-line import/namespace
+        generateIdModule.generateId = originalGenerateId;
     });
 
     // $FlowFixMe
     afterEach(() => {
         appendChildCalls = 0;
         imgMock.src = '';
+        document.cookie = 'paypal-cr-cart={}';
+        fetchCalls = [];
     });
 
     // $FlowFixMe
     it('should be a function that returns a tracker', () => {
         const tracker = Tracker();
-        expect(tracker).to.have.property('view');
         expect(tracker).to.have.property('addToCart');
         expect(tracker).to.have.property('setCart');
         expect(tracker).to.have.property('removeFromCart');
         expect(tracker).to.have.property('purchase');
-    });
-
-    // $FlowFixMe
-    it('should send view events', () => {
-        const email = '__test__email2@gmail.com';
-        const userName = '__test__userName2';
-        const tracker = Tracker({ user: { email, name: userName } });
-        expect(appendChildCalls).to.equal(0);
-        tracker.view({
-            page:  '/test2/apples',
-            title: 'apples'
-        });
-        expect(imgMock.src).to.equal(
-            'https://www.paypal.com/targeting/track/view?data=eyJwYWdlIjoiL3Rlc3QyL2FwcGxlcyIsInRpdGxlIjoiYXBwbGVzIiwidXNlciI6eyJlbWFpbCI6Il9fdGVzdF9fZW1haWwyQGdtYWlsLmNvbSIsIm5hbWUiOiJfX3Rlc3RfX3VzZXJOYW1lMiIsImlkIjoiYWJjMTIzIn0sInRyYWNraW5nVHlwZSI6InZpZXciLCJjbGllbnRJZCI6ImFiY3h5ejEyMyIsIm1lcmNoYW50SWQiOiJ4eXosaGlqLGxtbm8ifQ%3D%3D'
-        );
-        expect(JSON.stringify(extractDataParam(imgMock.src))).to.equal(
-            JSON.stringify({
-                page:  '/test2/apples',
-                title: 'apples',
-                user:  {
-                    email: '__test__email2@gmail.com',
-                    name:  '__test__userName2',
-                    id:    'abc123'
-                },
-                trackingType: 'view',
-                clientId:     'abcxyz123',
-                merchantId:   'xyz,hij,lmno'
-            })
-        );
-        expect(appendChildCalls).to.equal(1);
+        expect(tracker).to.have.property('track');
+        expect(tracker).to.have.property('getIdentity');
     });
 
     it('should send addToCart events', () => {
@@ -129,9 +125,6 @@ describe('paypal.Tracker', () => {
             total:           '12345.67',
             currencyCode:    'USD'
         });
-        expect(imgMock.src).to.equal(
-            'https://www.paypal.com/targeting/track/cartEvent?data=eyJjYXJ0SWQiOiJfX3Rlc3RfX2NhcnRJZCIsIml0ZW1zIjpbeyJpZCI6Il9fdGVzdF9fcHJvZHVjdElkIiwidXJsIjoiaHR0cHM6Ly9leGFtcGxlLmNvbS9fX3Rlc3RfX3Byb2R1Y3RJZCJ9XSwiZW1haWxDYW1wYWlnbklkIjoiX190ZXN0X19lbWFpbENhbXBhaWduSWQiLCJ0b3RhbCI6IjEyMzQ1LjY3IiwiY3VycmVuY3lDb2RlIjoiVVNEIiwiY2FydEV2ZW50VHlwZSI6ImFkZFRvQ2FydCIsInVzZXIiOnsiZW1haWwiOiJfX3Rlc3RfX2VtYWlsM0BnbWFpbC5jb20iLCJuYW1lIjoiX190ZXN0X191c2VyTmFtZTMiLCJpZCI6ImFiYzEyMyJ9LCJ0cmFja2luZ1R5cGUiOiJjYXJ0RXZlbnQiLCJjbGllbnRJZCI6ImFiY3h5ejEyMyIsIm1lcmNoYW50SWQiOiJ4eXosaGlqLGxtbm8ifQ%3D%3D'
-        );
         expect(JSON.stringify(extractDataParam(imgMock.src))).to.equal(
             JSON.stringify({
                 cartId: '__test__cartId',
@@ -152,10 +145,51 @@ describe('paypal.Tracker', () => {
                 },
                 trackingType: 'cartEvent',
                 clientId:     'abcxyz123',
-                merchantId:   'xyz,hij,lmno'
+                merchantId:   'xyz,hij,lmno',
+                deviceInfo
             })
         );
         expect(appendChildCalls).to.equal(1);
+        tracker.addToCart({
+            cartId: '__test__cartId0',
+            items:  [
+                {
+                    id:  '__test__productId0',
+                    url: 'https://example.com/__test__productId0'
+                }
+            ],
+            emailCampaignId: '__test__emailCampaignId0',
+            total:           '102345.67',
+            currencyCode:    'USD'
+        });
+        expect(JSON.stringify(extractDataParam(imgMock.src))).to.equal(
+            JSON.stringify({
+                cartId: '__test__cartId0',
+                items:  [
+                    {
+                        id:  '__test__productId',
+                        url: 'https://example.com/__test__productId'
+                    },
+                    {
+                        id:  '__test__productId0',
+                        url: 'https://example.com/__test__productId0'
+                    }
+                ],
+                emailCampaignId: '__test__emailCampaignId0',
+                total:           '102345.67',
+                currencyCode:    'USD',
+                cartEventType:   'addToCart',
+                user:            {
+                    email: '__test__email3@gmail.com',
+                    name:  '__test__userName3',
+                    id:    'abc123'
+                },
+                trackingType: 'cartEvent',
+                clientId:     'abcxyz123',
+                merchantId:   'xyz,hij,lmno',
+                deviceInfo
+            })
+        );
     });
 
     it('should send setCart events', () => {
@@ -163,6 +197,18 @@ describe('paypal.Tracker', () => {
         const userName = '__test__userName4';
         const tracker = Tracker({ user: { email, name: userName } });
         expect(appendChildCalls).to.equal(0);
+        tracker.addToCart({
+            cartId: '__test__cartId0',
+            items:  [
+                {
+                    id:  '__test__productId0',
+                    url: 'https://example.com/__test__productId0'
+                }
+            ],
+            emailCampaignId: '__test__emailCampaignId0',
+            total:           '102345.67',
+            currencyCode:    'USD'
+        });
         tracker.setCart({
             cartId: '__test__cartId',
             items:  [
@@ -175,9 +221,6 @@ describe('paypal.Tracker', () => {
             total:           '12345.67',
             currencyCode:    'USD'
         });
-        expect(imgMock.src).to.equal(
-            'https://www.paypal.com/targeting/track/cartEvent?data=eyJjYXJ0SWQiOiJfX3Rlc3RfX2NhcnRJZCIsIml0ZW1zIjpbeyJpZCI6Il9fdGVzdF9fcHJvZHVjdElkIiwidXJsIjoiaHR0cHM6Ly9leGFtcGxlLmNvbS9fX3Rlc3RfX3Byb2R1Y3RJZCJ9XSwiZW1haWxDYW1wYWlnbklkIjoiX190ZXN0X19lbWFpbENhbXBhaWduSWQiLCJ0b3RhbCI6IjEyMzQ1LjY3IiwiY3VycmVuY3lDb2RlIjoiVVNEIiwiY2FydEV2ZW50VHlwZSI6InNldENhcnQiLCJ1c2VyIjp7ImVtYWlsIjoiX190ZXN0X19lbWFpbDRAZ21haWwuY29tIiwibmFtZSI6Il9fdGVzdF9fdXNlck5hbWU0IiwiaWQiOiJhYmMxMjMifSwidHJhY2tpbmdUeXBlIjoiY2FydEV2ZW50IiwiY2xpZW50SWQiOiJhYmN4eXoxMjMiLCJtZXJjaGFudElkIjoieHl6LGhpaixsbW5vIn0%3D'
-        );
         expect(JSON.stringify(extractDataParam(imgMock.src))).to.equal(
             JSON.stringify({
                 cartId: '__test__cartId',
@@ -198,10 +241,11 @@ describe('paypal.Tracker', () => {
                 },
                 trackingType: 'cartEvent',
                 clientId:     'abcxyz123',
-                merchantId:   'xyz,hij,lmno'
+                merchantId:   'xyz,hij,lmno',
+                deviceInfo
             })
         );
-        expect(appendChildCalls).to.equal(1);
+        expect(appendChildCalls).to.equal(2);
     });
 
     it('should send removeFromCart events', () => {
@@ -218,9 +262,6 @@ describe('paypal.Tracker', () => {
                 }
             ]
         });
-        expect(imgMock.src).to.equal(
-            'https://www.paypal.com/targeting/track/cartEvent?data=eyJjYXJ0SWQiOiJfX3Rlc3RfX2NhcnRJZCIsIml0ZW1zIjpbeyJpZCI6Il9fdGVzdF9fcHJvZHVjdElkIiwidXJsIjoiaHR0cHM6Ly9leGFtcGxlLmNvbS9fX3Rlc3RfX3Byb2R1Y3RJZCJ9XSwiY2FydEV2ZW50VHlwZSI6InJlbW92ZUZyb21DYXJ0IiwidXNlciI6eyJlbWFpbCI6Il9fdGVzdF9fZW1haWw1QGdtYWlsLmNvbSIsIm5hbWUiOiJfX3Rlc3RfX3VzZXJOYW1lNSIsImlkIjoiYWJjMTIzIn0sInRyYWNraW5nVHlwZSI6ImNhcnRFdmVudCIsImNsaWVudElkIjoiYWJjeHl6MTIzIiwibWVyY2hhbnRJZCI6Inh5eixoaWosbG1ubyJ9'
-        );
         expect(JSON.stringify(extractDataParam(imgMock.src))).to.equal(
             JSON.stringify({
                 cartId: '__test__cartId',
@@ -238,7 +279,8 @@ describe('paypal.Tracker', () => {
                 },
                 trackingType: 'cartEvent',
                 clientId:     'abcxyz123',
-                merchantId:   'xyz,hij,lmno'
+                merchantId:   'xyz,hij,lmno',
+                deviceInfo
             })
         );
         expect(appendChildCalls).to.equal(1);
@@ -252,9 +294,6 @@ describe('paypal.Tracker', () => {
         tracker.purchase({
             cartId: '__test__cartId'
         });
-        expect(imgMock.src).to.equal(
-            'https://www.paypal.com/targeting/track/purchase?data=eyJjYXJ0SWQiOiJfX3Rlc3RfX2NhcnRJZCIsInVzZXIiOnsiZW1haWwiOiJfX3Rlc3RfX2VtYWlsNkBnbWFpbC5jb20iLCJuYW1lIjoiX190ZXN0X191c2VyTmFtZTYiLCJpZCI6ImFiYzEyMyJ9LCJ0cmFja2luZ1R5cGUiOiJwdXJjaGFzZSIsImNsaWVudElkIjoiYWJjeHl6MTIzIiwibWVyY2hhbnRJZCI6Inh5eixoaWosbG1ubyJ9'
-        );
         expect(JSON.stringify(extractDataParam(imgMock.src))).to.equal(
             JSON.stringify({
                 cartId: '__test__cartId',
@@ -265,7 +304,8 @@ describe('paypal.Tracker', () => {
                 },
                 trackingType: 'purchase',
                 clientId:     'abcxyz123',
-                merchantId:   'xyz,hij,lmno'
+                merchantId:   'xyz,hij,lmno',
+                deviceInfo
             })
         );
         expect(appendChildCalls).to.equal(1);
@@ -301,7 +341,8 @@ describe('paypal.Tracker', () => {
                         },
                         trackingType: 'purchase',
                         clientId:     'abcxyz123',
-                        merchantId:   'xyz,hij,lmno'
+                        merchantId:   'xyz,hij,lmno',
+                        deviceInfo
                     }
                 }
             ])
@@ -325,39 +366,10 @@ describe('paypal.Tracker', () => {
                 },
                 trackingType: 'setUser',
                 clientId:     'abcxyz123',
-                merchantId:   'xyz,hij,lmno'
+                merchantId:   'xyz,hij,lmno',
+                deviceInfo
             })
         );
-        tracker.view({
-            page: '/test2'
-        });
-        expect(imgMock.src).to.equal(
-            'https://www.paypal.com/targeting/track/view?data=eyJwYWdlIjoiL3Rlc3QyIiwidXNlciI6eyJlbWFpbCI6Il9fdGVzdF9fZW1haWw5IiwibmFtZSI6Il9fdGVzdF9fdXNlck5hbWU5IiwiaWQiOiJhYmMxMjMifSwidHJhY2tpbmdUeXBlIjoidmlldyIsImNsaWVudElkIjoiYWJjeHl6MTIzIiwibWVyY2hhbnRJZCI6Inh5eixoaWosbG1ubyJ9'
-        );
-        expect(JSON.stringify(extractDataParam(imgMock.src))).to.equal(
-            JSON.stringify({
-                page: '/test2',
-                user: {
-                    email: '__test__email9',
-                    name:  '__test__userName9',
-                    id:    'abc123'
-                },
-                trackingType: 'view',
-                clientId:     'abcxyz123',
-                merchantId:   'xyz,hij,lmno'
-            })
-        );
-        expect(appendChildCalls).to.equal(2);
-    });
-
-    it('should allow you to instantiate for anonymous users', () => {
-        const tracker = Tracker();
-        tracker.view({ page: '/hello/page' });
-        const dataParamObject = extractDataParam(imgMock.src);
-        // $FlowFixMe
-        expect(dataParamObject.page).to.equal('/hello/page');
-        // $FlowFixMe
-        expect(dataParamObject.trackingType).to.equal('view');
     });
 
     it('should allow you to instantiate a user and then set the user', () => {
@@ -386,7 +398,8 @@ describe('paypal.Tracker', () => {
                 },
                 trackingType: 'setUser',
                 clientId:     'abcxyz123',
-                merchantId:   'xyz,hij,lmno'
+                merchantId:   'xyz,hij,lmno',
+                deviceInfo
             })
         );
     });
@@ -431,7 +444,8 @@ describe('paypal.Tracker', () => {
                 },
                 trackingType: 'cartEvent',
                 clientId:     'abcxyz123',
-                merchantId:   'xyz,hij,lmno'
+                merchantId:   'xyz,hij,lmno',
+                deviceInfo
             })
         );
     });
@@ -469,8 +483,105 @@ describe('paypal.Tracker', () => {
                 user:            { id: '__test__cookie-id' },
                 trackingType:    'cartEvent',
                 clientId:        'abcxyz123',
-                merchantId:      'xyz,hij,lmno'
+                merchantId:      'xyz,hij,lmno',
+                deviceInfo
             })
         );
+    });
+
+    it('should hit partner-token route when identify method is invoked', done => {
+        const email = '__test__email3@gmail.com';
+        const userName = '__test__userName3';
+        const tracker = Tracker({ user: { email, name: userName } });
+        tracker.identify(data => {
+            try {
+                const params = fetchCalls.pop();
+                expect(params[0]).to.equal('https://paypal.com/muse/api/partner-token');
+                expect(params[1].body).to.equal(JSON.stringify({
+                    merchantId: 'xyz',
+                    clientId:   'abcxyz123'
+                }));
+                expect(data).to.deep.equal({
+                    hello:   'hi',
+                    success: true
+                });
+                done();
+            } catch (err) {
+                done(err);
+            }
+        });
+    });
+
+    it('should hit partner-token route defined with paramsToTokenUrl when identify method is invoked', done => {
+        const email = '__test__email3@gmail.com';
+        const userName = '__test__userName3';
+        const tokenUrl = 'www.blah.xyz';
+        const tracker = Tracker({
+            user:             { email, name: userName },
+            paramsToTokenUrl: () => tokenUrl
+        });
+        tracker.identify(data => {
+            try {
+                const params = fetchCalls.pop();
+                expect(params[0]).to.equal(tokenUrl);
+                expect(data).to.deep.equal({
+                    hello:   'hi',
+                    success: true
+                });
+                done();
+            } catch (err) {
+                done(err);
+            }
+        });
+    });
+
+    it('should return promise from identify call', done => {
+        const email = '__test__email3@gmail.com';
+        const userName = '__test__userName3';
+        const tracker = Tracker({ user: { email, name: userName } });
+        try {
+            tracker.identify().then(data => {
+                expect(data).to.deep.equal({
+                    hello:   'hi',
+                    success: true
+                });
+                done();
+            });
+        } catch (err) {
+            done(err);
+        }
+    });
+
+    it('should call getIdentity function with url passed in', done => {
+        const email = '__test__email3@gmail.com';
+        const userName = '__test__userName3';
+        const tracker = Tracker({ user: { email, name: userName } });
+
+        const data = {
+            mrid:             'NA4JBW4FWCUQL',
+            onIdentification: identityData => identityData
+        };
+        const url = 'https://www.paypal.com/muse/api/partner-token';
+        const result = tracker.getIdentity(data, url).then(accessToken => {
+            expect(accessToken).to.be.a('string');
+        });
+        expect(result).to.be.a('promise');
+        done();
+    });
+
+    it('should call getIdentity function with no url passed in', done => {
+        const email = '__test__email3@gmail.com';
+        const userName = '__test__userName3';
+        const tracker = Tracker({ user: { email, name: userName } });
+
+        const data = {
+            mrid:             'NA4JBW4FWCUQL',
+            onIdentification: identityData => identityData
+        };
+        const result = tracker.getIdentity(data).then(accessToken => {
+            expect(accessToken).to.be.a('string');
+        });
+        expect(result).to.be.a('promise');
+        done();
     });
 });

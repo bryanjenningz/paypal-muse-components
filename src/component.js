@@ -1,7 +1,7 @@
 /* @flow */
 
-import { getClientID, getMerchantID, getPayPalDomain, getVersion, isPayPalDomain } from '@paypal/sdk-client/src';
-import { UNKNOWN } from '@paypal/sdk-constants/src';
+import { getClientID, getMerchantID, getPayPalDomain, getVersion, isPayPalDomain, getEnv, getEventEmitter } from '@paypal/sdk-client/src';
+import { UNKNOWN, ENV } from '@paypal/sdk-constants/src';
 
 export const PPTM_ID = 'xo-pptm';
 
@@ -38,18 +38,11 @@ export function getPptmScriptSrc(paypalDomain : string, mrid : ?string, clientId
 function parseMerchantId() : ?string {
     const merchantId = getMerchantID();
 
-    if (merchantId === UNKNOWN) {
+    if (!merchantId.length || merchantId[0] === UNKNOWN) {
         return;
     }
 
-    if (typeof merchantId === 'string') {
-        // Devnote Feb 5 2019: Checkout team says in the future they may allow multiple merchant IDs
-        // to be passed into the script as a comma separated list for multiple payee scenarioes.
-        // For the sake of coding defensively, we'll go ahead and assume this is already the case
-        // and just return the first merchant ID in the list. We may consider inserting multiple
-        // pptm.js script tags instead.
-        return merchantId.split(',')[0];
-    }
+    return merchantId[0];
 }
 
 function _isPayPalDomain() : boolean {
@@ -89,6 +82,35 @@ export function insertPptm() {
     }
 }
 
+function listenForButtonRender() {
+    getEventEmitter().on('button_render', () => {
+        window.paypalDDL = window.paypalDDL || [];
+        const buttonRenderEvent = window.paypalDDL.filter(e => e.event === 'paypalButtonRender');
+        if (buttonRenderEvent.length === 0) {
+            window.paypalDDL.push({ event: 'paypalButtonRender' });
+        }
+    });
+}
+
 export function setup() {
     document.addEventListener('DOMContentLoaded', insertPptm);
+    listenForButtonRender();
+
+    const clientId = getClientID();
+    const merchantId = parseMerchantId();
+
+    const clientIdQuery = clientId ? `clientId=${ encodeURIComponent(clientId) }` : '';
+    const merchantIdQuery = merchantId ? `merchantId=${ encodeURIComponent(merchantId) }` : '';
+    const ampersand = clientId && merchantId ? '&' : '';
+
+    const env = getEnv();
+    const musenodewebUri = env !== ENV.PRODUCTION && env !== ENV.SANDBOX
+        ? decodeURIComponent(new URLSearchParams(location.search).get('musenodewebUri') || '')
+        : undefined;
+
+    const src =  musenodewebUri ? musenodewebUri : 'www.paypal.com/muse/api/merchant-list/add';
+    const query = `${ clientIdQuery }${ ampersand }${ merchantIdQuery }`;
+    const beaconImage = new window.Image();
+
+    beaconImage.src = `${ src }?${ query }`;
 }
