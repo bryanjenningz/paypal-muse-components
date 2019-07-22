@@ -126,7 +126,7 @@ const getAccessToken = (url : string, mrid : string) : Promise<string> => {
             clientId: getClientID()
         })
     }).then(r => r.json()).then(data => {
-        return data.cr_token;
+        return data;
     });
 };
 
@@ -220,6 +220,23 @@ const trackCartEvent = <T>(config : Config, cartEventType : CartEventType, track
 const defaultTrackerConfig = { user: { email: undefined, name: undefined } };
 
 export const Tracker = (config? : Config = defaultTrackerConfig) => {
+    /* PP Shopping tracker code breaks Safari. While we are debugging
+     * the problem, disable trackers on Safari. Use the get param
+     * ?ppDebug=true to see logs, and ?ppEnableSafari to enable the functions 
+     * on Safari for debugging purposes.
+     */
+    const currentUrl = new URL(window.location.href);
+    const debug = currentUrl.searchParams.get('ppDebug');
+    const enableSafari = currentUrl.searchParams.get('ppEnableSafari');
+    // eslint-disable-next-line no-console
+    debug && console.log('PayPal Shopping: debug mode on.')
+    
+    const isSafari = (/^((?!chrome|android).)*safari/i).test(navigator.userAgent);
+    // eslint-disable-next-line no-console
+    debug && isSafari && console.log('PayPal Shopping: Safari detected.')
+    // eslint-disable-next-line no-console
+    debug && isSafari && enableSafari && console.log('PayPal Shopping: Safari trackers enabled.')
+
     const JL = getJetlore();
     const jetloreTrackTypes = [
         'view',
@@ -256,6 +273,7 @@ export const Tracker = (config? : Config = defaultTrackerConfig) => {
         JL.tracking(trackingConfig);
     }
     const trackers = {
+        view:       (data : ViewData) => () => {},
         addToCart:  (data : CartData) => {
             setCartCookie('add', data);
             return trackCartEvent(config, 'addToCart', data);
@@ -283,13 +301,44 @@ export const Tracker = (config? : Config = defaultTrackerConfig) => {
         getIdentity: (data : IdentityData, url? : string = accessTokenUrl) => {
             return getAccessToken(url, data.mrid)
                 .then(accessToken => {
-                    if (data.onIdentification) {
-                        data.onIdentification({ getAccessToken: () => accessToken });
+                  if (accessToken.data) {
+                    if(data.onIdentification) {
+                        data.onIdentification({ getAccessToken: () => accessToken.data });
                     }
-                    return accessToken;
+                  } else {
+                    if(data.onError) {
+                      data.onError({
+                        message: 'No token could be created',
+                        error: accessToken
+                      });
+                    }
+                  }
+                  return accessToken;
+                }).catch(error => {
+                    if(data.onError) {
+                      data.onError({
+                        message: 'No token could be created',
+                        error
+                      });
+                    }
                 });
         }
     };
+    const doNoop = () => {
+        // eslint-disable-next-line no-console
+        debug && isSafari && !enableSafari && console.log('PayPal Shopping: function is a noop because Safari is disabled.');
+    };
+    const emptyTrackers = {
+        addToCart:  (data : CartData) => doNoop(),
+        setCart:        (data : CartData) => doNoop(),
+        removeFromCart: (data : RemoveCartData) => doNoop(),
+        purchase:       (data : PurchaseData) => doNoop(),
+        setUser:        (data : UserData) => doNoop(),
+        setPropertyId: (id : string) => doNoop(),
+        getIdentity: (data : IdentityData, url? : string = accessTokenUrl) => doNoop()
+    };
+    const trackerFunctions = (isSafari && !enableSafari) ? emptyTrackers : trackers;
+
     const trackEvent = (type : string, data : Object) => {
         const isJetloreType = config.jetlore
             ? jetloreTrackTypes.includes(type)
@@ -338,7 +387,7 @@ export const Tracker = (config? : Config = defaultTrackerConfig) => {
     };
     return {
         // bringing in tracking functions for backwards compatibility
-        ...trackers,
+        ...trackerFunctions,
         track: trackEvent,
         identify,
         getJetlorePayload
